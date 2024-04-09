@@ -2,74 +2,105 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMapboxGl, { Feature, Layer, Source } from "react-mapbox-gl";
 import DrawControl from "react-mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+import PolygonListModal from "./PolygonListModal";
+import Button from "react-bootstrap/esm/Button";
+import Alert from "react-bootstrap/esm/Alert";
+
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+const API_URL = process.env.REACT_APP_API_URL;
 
 const Map = ReactMapboxGl({
   accessToken: MAPBOX_TOKEN,
 });
 
 const MapView = () => {
-  const [polygons, setPolygons] = useState([]);
+  const [polygonsData, setPolygonsData] = useState([]);
+  const [formData, setFormData] = useState({
+    polygonName: "",
+    polygonCoordinates: [],
+  });
+  const [modalShow, setModalShow] = useState(false);
+  const [showAlert, setShowAlert] = useState(false); // State for alert visibility
+
+
+
+  // Function to fetch polygons data
+  const fetchData = async () => {
+    try {
+      const response = await fetch(`${API_URL}/polygons`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch polygons");
+      }
+      const data = await response.json();
+      setPolygonsData(data);
+    } catch (error) {
+      console.error("Error fetching polygons:", error);
+    }
+  };
+
+  // Function to post polygon data
+  const postData = async (payload) => {
+    try {
+      const response = await fetch(`${API_URL}/polygons`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to post polygon");
+      }
+      // Optionally, you can fetch data again after posting
+      setShowAlert(true); //
+      fetchData();
+    } catch (error) {
+      console.error("Error posting polygon:", error);
+    }
+  };
 
   useEffect(() => {
     // Mock data for polygons
-    const data = [
-      {
-        id: "bea6cfd7d9b106c5ec0d6a84db146fae",
-        type: "Feature",
-        properties: {},
-        geometry: {
-          coordinates: [
-            [
-              [73.7979084568687, 18.551435230602564],
-              [73.93317762190759, 18.54134495445247],
-              [73.87549939925199, 18.416632135207763],
-              [73.77318921858807, 18.40848846119016],
-              [73.77490583235758, 18.412397472807825],
-              [73.78486219222026, 18.4244496996794],
-              [73.7979084568687, 18.551435230602564],
-            ],
-          ],
-          type: "Polygon",
-        },
-      },
-    ];
-    setPolygons(data);
+    fetchData();
   }, []);
 
-  const [payload, setPayload] = useState({ name: "" });
   const onDrawCreate = ({ features }) => {
-    console.log(features);
+    setFormData((prevData) => ({ ...prevData, polygonCoordinates: features }));
   };
 
   const onDrawUpdate = ({ features }) => {
-    console.log(features);
+    setFormData((prevData) => ({ ...prevData, polygonCoordinates: features }));
   };
 
   const onDrawDelete = ({ features }) => {
     console.log(features);
   };
 
-  const handleChange = (e) => {
-    setPayload({ ...payload, name: e });
-    console.log(e);
-  };
-  const handleClick = (e) => {
-    e.preventDefault();
-    // console.log('clicked');
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
   };
 
-  console.log(polygons);
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    postData(formData);
+    setFormData(formData)
+  };
 
   return (
     <div>
-      <h2>Welcome to react-mapbox-gl-draw</h2>
+      {/* <h2>Welcome to react-mapbox</h2> */}
+      {showAlert && (
+        <Alert variant="success" onClose={() => setShowAlert(false)} dismissible>
+          Polygon added successfully!
+        </Alert>
+      )}
       <Map
         style="mapbox://styles/mapbox/streets-v9" // eslint-disable-line
         center={[73.85453323244155, 18.51348783194281]}
         containerStyle={{
-          height: "600px",
+          height: "650px",
           width: "100vw",
         }}
       >
@@ -78,7 +109,7 @@ const MapView = () => {
           onDrawUpdate={onDrawUpdate}
           onDrawDelete={onDrawDelete}
         />
-        {polygons?.map((polygon) => (
+        {/* {polygonsData?.map((polygon) => (
           <Layer
             key={polygon.id}
             type="fill"
@@ -87,16 +118,31 @@ const MapView = () => {
           >
             <Feature coordinates={polygon.geometry.coordinates} />
           </Layer>
-        ))}
+        ))} */}
       </Map>
-      <input
-        placeholder="Enter Polygon Name"
-        type="text"
-        onChange={(e) => {
-          handleChange(e.target.value);
-        }}
-      ></input>
-      <button onClick={handleClick}>Click</button>
+      <div style={{display:'flex', justifyContent:'space-around', alignItems:'center', margin:'10px'}}>
+
+      <form onSubmit={handleFormSubmit}>
+        <input
+          placeholder="Enter Polygon Name"
+          name="polygonName"
+          type="text"
+          required
+          value={formData.polygonName}
+          onChange={handleInputChange}
+        ></input>
+        <Button style={{marginLeft:'20px'}} type="submit" variant="success"  disabled={!formData.polygonCoordinates || !formData.polygonName}>Add</Button>
+      </form>
+      <Button variant="dark" onClick={() => setModalShow(true)} >
+        View Polygon List
+      </Button>
+      </div>
+
+      <PolygonListModal
+        show={modalShow}
+        onHide={() => setModalShow(false)}
+        polygonsData={polygonsData}
+      />
     </div>
   );
 };
